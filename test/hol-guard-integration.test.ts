@@ -60,7 +60,7 @@ describe("HOL Guard GitAgent integration", () => {
 			assert.deepEqual(result, { action: "block", reason: "Guard blocked the command" });
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
-			assert.deepEqual(recorded.argv.slice(0, 4), ["guard", "hook", "--harness", "codex"]);
+			assert.deepEqual(recorded.argv.slice(0, 4), ["guard", "hook", "--harness", "gitagent"]);
 			assert.ok(recorded.argv.includes("--json"));
 			assert.equal(recorded.input.hook_event_name, "PreToolUse");
 			assert.equal(recorded.input.tool_name, "Bash");

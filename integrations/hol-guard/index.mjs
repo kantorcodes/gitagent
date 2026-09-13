@@ -71,7 +71,7 @@ function guardArgs(config) {
 	const home = nonEmptyString(config.home);
 	const workspace = nonEmptyString(config.workspace);
 	if (guardHome) args.push("--guard-home", guardHome);
-	args.push("--harness", "codex");
+	args.push("--harness", "gitagent");
 	if (home) args.push("--home", home);
 	if (workspace) args.push("--workspace", workspace);
 	args.push("--json");

@@ -66,7 +66,7 @@ function lastJsonObject(stdout) {
 }
 
 function guardArgs(config) {
-	const args = ["guard", "hook"];
+	const args = ["hook"];
 	const guardHome = nonEmptyString(config.guard_home);
 	const home = nonEmptyString(config.home);
 	const workspace = nonEmptyString(config.workspace);

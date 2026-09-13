@@ -7,11 +7,9 @@ function nonEmptyString(value) {
 }
 
 function guardReason(payload) {
-	const hookSpecific = payload?.hookSpecificOutput;
 	for (const value of [
-		hookSpecific?.permissionDecisionReason,
+		payload?.classification?.reason,
 		payload?.reason,
-		payload?.stopReason,
 		payload?.message,
 	]) {
 		const text = nonEmptyString(value);
@@ -25,27 +23,11 @@ export function guardResponseToHookResult(payload) {
 		return { action: "block", reason: "HOL Guard returned an invalid response." };
 	}
 
-	const permissionDecision = payload.hookSpecificOutput?.permissionDecision;
-	if (permissionDecision === "allow") return { action: "allow" };
-	if (permissionDecision === "deny") {
-		return { action: "block", reason: guardReason(payload) };
+	const minimumAction = nonEmptyString(payload.minimum_action)?.toLowerCase();
+	if (minimumAction === "allow" || minimumAction === "monitor") {
+		return { action: "allow" };
 	}
-	if (permissionDecision === "ask") {
-		return {
-			action: "block",
-			reason: guardReason(payload) || "HOL Guard requires review before this command can run.",
-		};
-	}
-
-	const decision = nonEmptyString(payload.decision)?.toLowerCase();
-	if (decision === "allow") return { action: "allow" };
-	if (decision === "block" || decision === "deny" || decision === "ask" || decision === "review") {
-		return { action: "block", reason: guardReason(payload) };
-	}
-
-	const policyAction = nonEmptyString(payload.policy_action)?.toLowerCase();
-	if (policyAction === "allow" || policyAction === "warn") return { action: "allow" };
-	if (["block", "review", "require-reapproval", "sandbox-required"].includes(policyAction)) {
+	if (minimumAction === "review" || minimumAction === "block") {
 		return { action: "block", reason: guardReason(payload) };
 	}
 
@@ -65,17 +47,8 @@ function lastJsonObject(stdout) {
 	return null;
 }
 
-function guardArgs(config) {
-	const args = ["hook"];
-	const guardHome = nonEmptyString(config.guard_home);
-	const home = nonEmptyString(config.home);
-	const workspace = nonEmptyString(config.workspace);
-	if (guardHome) args.push("--guard-home", guardHome);
-	args.push("--harness", "gitagent");
-	if (home) args.push("--home", home);
-	if (workspace) args.push("--workspace", workspace);
-	args.push("--json");
-	return args;
+function guardArgs(command) {
+	return ["command", "test", command, "--json"];
 }
 
 export async function evaluateWithGuard(ctx, config = {}) {
@@ -89,22 +62,15 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		? configuredTimeout
 		: DEFAULT_TIMEOUT_MS;
 	const workspace = nonEmptyString(config.workspace) || process.cwd();
-	const input = JSON.stringify({
-		hook_event_name: "PreToolUse",
-		event: "PreToolUse",
-		session_id: ctx.session_id,
-		tool_name: "Bash",
-		tool_input: { command },
-		cwd: workspace,
-	});
 
 	return new Promise((resolve) => {
 		let stdout = "";
 		let stderr = "";
 		let settled = false;
-		const child = spawn(binary, guardArgs({ ...config, workspace }), {
-			stdio: ["pipe", "pipe", "pipe"],
+		const child = spawn(binary, guardArgs(command), {
+			stdio: ["ignore", "pipe", "pipe"],
 			env: { ...process.env },
+			cwd: workspace,
 			shell: false,
 		});
 
@@ -125,7 +91,6 @@ export async function evaluateWithGuard(ctx, config = {}) {
 
 		child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf-8"); });
 		child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf-8"); });
-		child.stdin.on("error", () => {});
 		child.on("error", (error) => {
 			finish({ action: "block", reason: `HOL Guard could not start: ${error.message}` });
 		});
@@ -138,11 +103,8 @@ export async function evaluateWithGuard(ctx, config = {}) {
 				});
 				return;
 			}
-			const payload = lastJsonObject(stdout);
-			finish(guardResponseToHookResult(payload));
+			finish(guardResponseToHookResult(lastJsonObject(stdout)));
 		});
-
-		child.stdin.end(input);
 	});
 }
 

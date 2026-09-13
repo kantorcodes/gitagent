@@ -6,24 +6,17 @@ import assert from "node:assert/strict";
 import { evaluateWithGuard, guardResponseToHookResult } from "../integrations/hol-guard/index.mjs";
 
 describe("HOL Guard GitAgent integration", () => {
-	it("maps Guard decisions to GitAgent hook results", () => {
-		assert.deepEqual(
-			guardResponseToHookResult({ hookSpecificOutput: { permissionDecision: "allow" } }),
-			{ action: "allow" },
-		);
+	it("maps Guard command floors to GitAgent hook results", () => {
+		assert.deepEqual(guardResponseToHookResult({ minimum_action: "allow" }), { action: "allow" });
+		assert.deepEqual(guardResponseToHookResult({ minimum_action: "monitor" }), { action: "allow" });
 		assert.deepEqual(
 			guardResponseToHookResult({
-				hookSpecificOutput: {
-					permissionDecision: "deny",
-					permissionDecisionReason: "blocked by guard",
-				},
+				minimum_action: "review",
+				classification: { reason: "Guard requires review" },
 			}),
-			{ action: "block", reason: "blocked by guard" },
+			{ action: "block", reason: "Guard requires review" },
 		);
-		assert.equal(
-			guardResponseToHookResult({ hookSpecificOutput: { permissionDecision: "ask" } }).action,
-			"block",
-		);
+		assert.equal(guardResponseToHookResult({ minimum_action: "block" }).action, "block");
 		assert.equal(guardResponseToHookResult({ unexpected: true }).action, "block");
 	});
 
@@ -34,7 +27,7 @@ describe("HOL Guard GitAgent integration", () => {
 		);
 	});
 
-	it("invokes HOL Guard with the command payload and blocks a deny", async (t) => {
+	it("invokes HOL Guard command inspection and blocks a review", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");
 			return;
@@ -45,7 +38,7 @@ describe("HOL Guard GitAgent integration", () => {
 		const fixture = join(dir, "hol-guard-fixture.mjs");
 		await writeFile(
 			fixture,
-			`#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nlet input = "";\nfor await (const chunk of process.stdin) input += chunk;\nwriteFileSync(process.env.GUARD_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), input: JSON.parse(input) }));\nprocess.stdout.write(JSON.stringify({ hookSpecificOutput: { permissionDecision: "deny", permissionDecisionReason: "Guard blocked the command" } }) + "\\n");\n`,
+			`#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.GUARD_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));\nprocess.stdout.write(JSON.stringify({ minimum_action: "review", classification: { reason: "Guard requires review" } }) + "\\n");\n`,
 			"utf-8",
 		);
 		await chmod(fixture, 0o755);
@@ -57,14 +50,11 @@ describe("HOL Guard GitAgent integration", () => {
 				{ session_id: "session-1", tool: "cli", args: { command: "rm -rf ./build" } },
 				{ binary: fixture, workspace: dir, timeout_ms: 2000 },
 			);
-			assert.deepEqual(result, { action: "block", reason: "Guard blocked the command" });
+			assert.deepEqual(result, { action: "block", reason: "Guard requires review" });
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
-			assert.deepEqual(recorded.argv.slice(0, 3), ["hook", "--harness", "gitagent"]);
-			assert.ok(recorded.argv.includes("--json"));
-			assert.equal(recorded.input.hook_event_name, "PreToolUse");
-			assert.equal(recorded.input.tool_name, "Bash");
-			assert.equal(recorded.input.tool_input.command, "rm -rf ./build");
+			assert.deepEqual(recorded.argv, ["command", "test", "rm -rf ./build", "--json"]);
+			assert.equal(recorded.cwd, dir);
 		} finally {
 			if (previous === undefined) delete process.env.GUARD_CAPTURE;
 			else process.env.GUARD_CAPTURE = previous;

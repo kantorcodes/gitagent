@@ -24,10 +24,11 @@ export function guardResponseToHookResult(payload) {
 	}
 
 	const minimumAction = nonEmptyString(payload.minimum_action)?.toLowerCase();
-	if (minimumAction === "allow" || minimumAction === "monitor") {
+	const explicitlyBenign = payload?.classification?.explicitly_benign === true;
+	if (minimumAction === "allow" && explicitlyBenign) {
 		return { action: "allow" };
 	}
-	if (minimumAction === "review" || minimumAction === "block") {
+	if (["allow", "monitor", "review", "block"].includes(minimumAction)) {
 		return { action: "block", reason: guardReason(payload) };
 	}
 

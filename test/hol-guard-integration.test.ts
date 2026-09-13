@@ -7,8 +7,27 @@ import { evaluateWithGuard, guardResponseToHookResult } from "../integrations/ho
 
 describe("HOL Guard GitAgent integration", () => {
 	it("maps Guard command floors to GitAgent hook results", () => {
-		assert.deepEqual(guardResponseToHookResult({ minimum_action: "allow" }), { action: "allow" });
-		assert.deepEqual(guardResponseToHookResult({ minimum_action: "monitor" }), { action: "allow" });
+		assert.deepEqual(
+			guardResponseToHookResult({
+				minimum_action: "allow",
+				classification: { explicitly_benign: true },
+			}),
+			{ action: "allow" },
+		);
+		assert.equal(
+			guardResponseToHookResult({
+				minimum_action: "allow",
+				classification: { explicitly_benign: false },
+			}).action,
+			"block",
+		);
+		assert.equal(
+			guardResponseToHookResult({
+				minimum_action: "monitor",
+				classification: { explicitly_benign: true },
+			}).action,
+			"block",
+		);
 		assert.deepEqual(
 			guardResponseToHookResult({
 				minimum_action: "review",

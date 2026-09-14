@@ -57,7 +57,7 @@ describe("HOL Guard GitAgent integration", () => {
 		const fixture = join(dir, "hol-guard-fixture.mjs");
 		await writeFile(
 			fixture,
-			`#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.GUARD_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));\nprocess.stdout.write(JSON.stringify({ minimum_action: "review", classification: { reason: "Guard requires review" } }) + "\\n");\n`,
+			`#!/usr/bin/env node\nimport { writeFileSync } from "node:fs";\nwriteFileSync(process.env.GUARD_CAPTURE, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd(), guardHome: process.env.HOL_GUARD_HOME, home: process.env.HOME }));\nprocess.stdout.write(JSON.stringify({ minimum_action: "review", classification: { reason: "Guard requires review" } }) + "\\n");\n`,
 			"utf-8",
 		);
 		await chmod(fixture, 0o755);
@@ -67,13 +67,21 @@ describe("HOL Guard GitAgent integration", () => {
 		try {
 			const result = await evaluateWithGuard(
 				{ session_id: "session-1", tool: "cli", args: { command: "rm -rf ./build" } },
-				{ binary: fixture, workspace: dir, timeout_ms: 2000 },
+				{
+					binary: fixture,
+					workspace: dir,
+					timeout_ms: 2000,
+					guard_home: join(dir, "guard-home"),
+					home: join(dir, "home"),
+				},
 			);
 			assert.deepEqual(result, { action: "block", reason: "Guard requires review" });
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
 			assert.deepEqual(recorded.argv, ["command", "test", "rm -rf ./build", "--json"]);
 			assert.equal(recorded.cwd, dir);
+			assert.equal(recorded.guardHome, join(dir, "guard-home"));
+			assert.equal(recorded.home, join(dir, "home"));
 		} finally {
 			if (previous === undefined) delete process.env.GUARD_CAPTURE;
 			else process.env.GUARD_CAPTURE = previous;

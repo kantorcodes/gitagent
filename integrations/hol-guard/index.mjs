@@ -63,6 +63,11 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		? configuredTimeout
 		: DEFAULT_TIMEOUT_MS;
 	const workspace = nonEmptyString(config.workspace) || process.cwd();
+	const childEnv = { ...process.env };
+	const guardHome = nonEmptyString(config.guard_home);
+	if (guardHome) childEnv.HOL_GUARD_HOME = guardHome;
+	const home = nonEmptyString(config.home);
+	if (home) childEnv.HOME = home;
 
 	return new Promise((resolve) => {
 		let stdout = "";
@@ -70,7 +75,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		let settled = false;
 		const child = spawn(binary, guardArgs(command), {
 			stdio: ["ignore", "pipe", "pipe"],
-			env: { ...process.env },
+			env: childEnv,
 			cwd: workspace,
 			shell: false,
 		});

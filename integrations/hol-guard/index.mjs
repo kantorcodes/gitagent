@@ -35,8 +35,17 @@ export function guardResponseToHookResult(payload) {
 	return { action: "block", reason: "HOL Guard returned no recognized decision." };
 }
 
-function lastJsonObject(stdout) {
-	const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+function guardJsonObject(stdout) {
+	const output = stdout.trim();
+	if (!output) return null;
+	try {
+		const value = JSON.parse(output);
+		if (value && typeof value === "object" && !Array.isArray(value)) return value;
+	} catch {
+		// Fall back to a final standalone JSON line for wrappers that add diagnostics.
+	}
+
+	const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 	for (let i = lines.length - 1; i >= 0; i--) {
 		try {
 			const value = JSON.parse(lines[i]);
@@ -109,7 +118,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 				});
 				return;
 			}
-			finish(guardResponseToHookResult(lastJsonObject(stdout)));
+			finish(guardResponseToHookResult(guardJsonObject(stdout)));
 		});
 	});
 }

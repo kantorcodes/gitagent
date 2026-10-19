@@ -58,7 +58,7 @@ function guardJsonObject(stdout) {
 }
 
 function guardArgs(command) {
-	return ["command", "test", command, "--json"];
+	return ["command", "test", "--json", "--", command];
 }
 
 export async function evaluateWithGuard(ctx, config = {}) {

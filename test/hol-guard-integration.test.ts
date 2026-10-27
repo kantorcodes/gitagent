@@ -78,7 +78,7 @@ describe("HOL Guard GitAgent integration", () => {
 			assert.deepEqual(result, { action: "block", reason: "Guard requires review" });
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
-			assert.deepEqual(recorded.argv, ["command", "test", "rm -rf ./build", "--json"]);
+			assert.deepEqual(recorded.argv, ["command", "test", "--json", "--", "rm -rf ./build"]);
 			assert.equal(recorded.cwd, dir);
 			assert.equal(recorded.guardHome, join(dir, "guard-home"));
 			assert.equal(recorded.home, join(dir, "home"));

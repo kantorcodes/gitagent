@@ -59,6 +59,24 @@ describe("HOL Guard GitAgent integration", () => {
 			}).action,
 			"allow",
 		);
+		for (const stop of [
+			{ continue: false },
+			{ continue: "false" },
+			{ continue: 0 },
+			{ continue: null },
+			{ decision: "deny" },
+			{ decision: "review" },
+			{ decision: 0 },
+		]) {
+			assert.equal(
+				guardResponseToHookResult({
+					minimum_action: "allow",
+					classification: { explicitly_benign: true },
+					...stop,
+				}).action,
+				"block",
+			);
+		}
 		assert.equal(guardResponseToHookResult({ minimum_action: "block" }).action, "block");
 		assert.equal(guardResponseToHookResult({ unexpected: true }).action, "block");
 	});

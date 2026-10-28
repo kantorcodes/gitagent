@@ -107,12 +107,20 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		let stderr = "";
 		let outputBytes = 0;
 		let settled = false;
-		const child = spawn(binary, guardArgs(command), {
-			stdio: ["ignore", "pipe", "pipe"],
-			env: childEnv,
-			cwd: workspace,
-			shell: false,
-		});
+		let child;
+		try {
+			child = spawn(binary, guardArgs(command), {
+				stdio: ["ignore", "pipe", "pipe"],
+				env: childEnv,
+				cwd: workspace,
+				shell: false,
+			});
+		} catch {
+			// Node can throw synchronously for invalid argv (e.g. embedded NUL).
+			// Reject the hook rather than propagating a rejected promise to GitAgent.
+			resolve({ action: "block", reason: "HOL Guard could not start due to invalid process arguments." });
+			return;
+		}
 
 		const finish = (result) => {
 			if (settled) return;

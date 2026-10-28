@@ -35,6 +35,30 @@ describe("HOL Guard GitAgent integration", () => {
 			}),
 			{ action: "block", reason: "Guard requires review" },
 		);
+		assert.deepEqual(
+			guardResponseToHookResult({
+				decision: "review",
+				minimum_action: "allow",
+				classification: { explicitly_benign: true, reason: "Explicit review is required" },
+			}),
+			{ action: "block", reason: "Explicit review is required" },
+		);
+		assert.equal(
+			guardResponseToHookResult({
+				decision: "unrecognized-stop",
+				minimum_action: "allow",
+				classification: { explicitly_benign: true },
+			}).action,
+			"block",
+		);
+		assert.equal(
+			guardResponseToHookResult({
+				decision: "allow",
+				minimum_action: "allow",
+				classification: { explicitly_benign: true },
+			}).action,
+			"allow",
+		);
 		assert.equal(guardResponseToHookResult({ minimum_action: "block" }).action, "block");
 		assert.equal(guardResponseToHookResult({ unexpected: true }).action, "block");
 	});

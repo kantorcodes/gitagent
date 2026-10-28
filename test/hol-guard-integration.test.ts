@@ -3,9 +3,18 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateWithGuard, guardResponseToHookResult } from "../integrations/hol-guard/index.mjs";
+import { evaluateWithGuard, guardJsonObject, guardResponseToHookResult } from "../integrations/hol-guard/index.mjs";
 
 describe("HOL Guard GitAgent integration", () => {
+	it("refuses multiple structured Guard verdicts, including deny followed by allow", () => {
+		const allow = JSON.stringify({ minimum_action: "allow", classification: { explicitly_benign: true } });
+		const deny = JSON.stringify({ minimum_action: "block", classification: { explicitly_benign: false } });
+		assert.deepEqual(guardJsonObject("diagnostic\n" + allow), JSON.parse(allow));
+		for (const output of [deny + "\n" + allow, allow + "\n" + deny, allow + "\n" + allow]) {
+			assert.equal(guardJsonObject(output), null);
+		}
+	});
+
 	it("maps Guard command floors to GitAgent hook results", () => {
 		assert.deepEqual(
 			guardResponseToHookResult({

@@ -129,6 +129,19 @@ describe("HOL Guard GitAgent integration", () => {
 		assert.equal(guardResponseToHookResult({ unexpected: true }).action, "block");
 	});
 
+	it("rejects an unspecified or relative cli workspace instead of using process.cwd", async () => {
+		for (const workspace of [undefined, "", "./other-repo"]) {
+			const result = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: "missing-guard", workspace },
+			);
+			assert.deepEqual(result, {
+				action: "block",
+				reason: "HOL Guard needs an absolute workspace matching the agent cli directory.",
+			});
+		}
+	});
+
 	it("only gates the cli tool", async () => {
 		assert.deepEqual(
 			await evaluateWithGuard({ tool: "read", args: { path: "README.md" } }, { binary: "missing-guard" }),

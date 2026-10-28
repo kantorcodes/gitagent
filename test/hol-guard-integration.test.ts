@@ -152,7 +152,7 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
-	it("invokes HOL Guard command inspection and blocks a review", async (t) => {
+	it("inspects the exact command text and blocks a review", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");
 			return;
@@ -172,7 +172,7 @@ describe("HOL Guard GitAgent integration", () => {
 		process.env.GUARD_CAPTURE = capture;
 		try {
 			const result = await evaluateWithGuard(
-				{ session_id: "session-1", tool: "cli", args: { command: "rm -rf ./build" } },
+				{ session_id: "session-1", tool: "cli", args: { command: "  cat <<\'EOF\'\\nexample\\nEOF\\n" } },
 				{
 					binary: fixture,
 					workspace: dir,
@@ -184,7 +184,7 @@ describe("HOL Guard GitAgent integration", () => {
 			assert.deepEqual(result, { action: "block", reason: "Guard requires review" });
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
-			assert.deepEqual(recorded.argv, ["command", "test", "--json", "--", "rm -rf ./build"]);
+			assert.deepEqual(recorded.argv, ["command", "test", "--json", "--", "  cat <<\'EOF\'\\nexample\\nEOF\\n"]);
 			assert.equal(recorded.cwd, dir);
 			assert.equal(recorded.guardHome, join(dir, "guard-home"));
 			assert.equal(recorded.home, join(dir, "home"));

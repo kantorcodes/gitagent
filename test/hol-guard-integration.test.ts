@@ -117,6 +117,28 @@ describe("HOL Guard GitAgent integration", () => {
 		);
 	});
 
+	it("blocks oversized Guard output even when followed by an allow verdict", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("fixture executable uses a POSIX shebang");
+			return;
+		}
+		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-size-"));
+		for (const stream of ["stdout", "stderr"]) {
+			const fixture = join(dir, `oversized-${stream}.mjs`);
+			await writeFile(
+				fixture,
+				`#!/usr/bin/env node\nprocess.${stream}.write("X".repeat(1024 * 1024 + 1));\nprocess.stdout.write(JSON.stringify({ minimum_action: "allow", classification: { explicitly_benign: true } }));\n`,
+				"utf-8",
+			);
+			await chmod(fixture, 0o755);
+			const result = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: fixture, workspace: dir, timeout_ms: 3000 },
+			);
+			assert.deepEqual(result, { action: "block", reason: "HOL Guard output exceeded the maximum size." });
+		}
+	});
+
 	it("invokes HOL Guard command inspection and blocks a review", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");

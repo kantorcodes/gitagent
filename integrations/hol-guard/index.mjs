@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 
 const DEFAULT_TIMEOUT_MS = 6000;
+const MAX_GUARD_OUTPUT_BYTES = 1024 * 1024;
 
 function nonEmptyString(value) {
 	return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -104,6 +105,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	return new Promise((resolve) => {
 		let stdout = "";
 		let stderr = "";
+		let outputBytes = 0;
 		let settled = false;
 		const child = spawn(binary, guardArgs(command), {
 			stdio: ["ignore", "pipe", "pipe"],
@@ -127,8 +129,19 @@ export async function evaluateWithGuard(ctx, config = {}) {
 			});
 		}, timeoutMs);
 
-		child.stdout.on("data", (chunk) => { stdout += chunk.toString("utf-8"); });
-		child.stderr.on("data", (chunk) => { stderr += chunk.toString("utf-8"); });
+		const captureOutput = (chunk, stream) => {
+			if (settled) return;
+			outputBytes += chunk.length;
+			if (outputBytes > MAX_GUARD_OUTPUT_BYTES) {
+				child.kill("SIGTERM");
+				finish({ action: "block", reason: "HOL Guard output exceeded the maximum size." });
+				return;
+			}
+			if (stream === "stdout") stdout += chunk.toString("utf-8");
+			else stderr += chunk.toString("utf-8");
+		};
+		child.stdout.on("data", (chunk) => captureOutput(chunk, "stdout"));
+		child.stderr.on("data", (chunk) => captureOutput(chunk, "stderr"));
 		child.on("error", (error) => {
 			finish({ action: "block", reason: `HOL Guard could not start: ${error.message}` });
 		});

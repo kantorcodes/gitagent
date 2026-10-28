@@ -33,7 +33,14 @@ export function guardResponseToHookResult(payload) {
 	const hasPolicyAction = Object.prototype.hasOwnProperty.call(payload, "policy_action");
 	const policyAction = nonEmptyString(payload.policy_action)?.toLowerCase();
 	const policyStopped = hasPolicyAction && !["allow", "not_run"].includes(policyAction);
-	if (continuationStopped || decisionStopped || policyStopped) {
+	const hasHookOutput = Object.prototype.hasOwnProperty.call(payload, "hookSpecificOutput");
+	const hookOutput = payload.hookSpecificOutput;
+	const hookStopped = hasHookOutput && (
+		!hookOutput || typeof hookOutput !== "object" || Array.isArray(hookOutput) ||
+		hookOutput.hookEventName !== "PreToolUse" ||
+		hookOutput.permissionDecision !== "allow"
+	);
+	if (continuationStopped || decisionStopped || policyStopped || hookStopped) {
 		return { action: "block", reason: guardReason(payload) };
 	}
 

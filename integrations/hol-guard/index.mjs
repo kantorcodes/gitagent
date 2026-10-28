@@ -87,8 +87,11 @@ function guardArgs(command) {
 
 export async function evaluateWithGuard(ctx, config = {}) {
 	if (ctx?.tool !== "cli") return { action: "allow" };
-	const command = nonEmptyString(ctx?.args?.command);
-	if (!command) return { action: "block", reason: "HOL Guard could not inspect a cli command." };
+	// Inspect the exact command GitAgent will execute; trimming can change shell/heredoc input.
+	const command = ctx?.args?.command;
+	if (typeof command !== "string" || !command.trim()) {
+		return { action: "block", reason: "HOL Guard could not inspect a cli command." };
+	}
 
 	const binary = nonEmptyString(config.binary) || process.env.HOL_GUARD_BIN || "hol-guard";
 	const configuredTimeout = Number(config.timeout_ms);

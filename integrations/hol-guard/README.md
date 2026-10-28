@@ -20,7 +20,7 @@ gitagent plugin list
 
 The directory contains `plugin.yaml` and `index.mjs`. The plugin enables a programmatic hook; it does not require changing GitAgent's default tool implementation. You can disable it with `gitagent plugin disable hol-guard`, or remove it through the regular GitAgent plugin command.
 
-Configuration fields in `plugin.yaml` include `binary` (or `HOL_GUARD_BIN`), `workspace`, `guard_home` and `timeout_ms` (default 6,000). If the Guard CLI cannot be started, returns invalid or contradictory JSON, requests review, or times out, the `cli` call is blocked.
+Configuration fields in `plugin.yaml` include `binary` (or `HOL_GUARD_BIN`), `workspace`, `guard_home` and `timeout_ms` (default 6,000). Set `workspace` to the **absolute directory in which the GitAgent `cli` tool actually executes** (the agent/project directory). The hook cannot infer that directory reliably from `process.cwd()`, especially when GitAgent is invoked from another directory or SDK session. An unset or relative `workspace` blocks protected `cli` calls; it must not fall back to inspecting the launcher's unrelated checkout. If the Guard CLI cannot be started, returns invalid or contradictory JSON, requests review, or times out, the `cli` call is also blocked.
 
 ## Security and coverage limits
 

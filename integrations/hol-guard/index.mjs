@@ -28,7 +28,12 @@ export function guardResponseToHookResult(payload) {
 	const decision = nonEmptyString(payload.decision)?.toLowerCase();
 	const continuationStopped = Object.prototype.hasOwnProperty.call(payload, "continue") && payload.continue !== true;
 	const decisionStopped = Object.prototype.hasOwnProperty.call(payload, "decision") && decision !== "allow";
-	if (continuationStopped || decisionStopped) {
+	// Never let a benign command classifier override a concrete policy stop.
+	// Inspection-only output can use not_run without evaluating runtime policy.
+	const hasPolicyAction = Object.prototype.hasOwnProperty.call(payload, "policy_action");
+	const policyAction = nonEmptyString(payload.policy_action)?.toLowerCase();
+	const policyStopped = hasPolicyAction && !["allow", "not_run"].includes(policyAction);
+	if (continuationStopped || decisionStopped || policyStopped) {
 		return { action: "block", reason: guardReason(payload) };
 	}
 

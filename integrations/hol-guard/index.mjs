@@ -49,26 +49,28 @@ export function guardResponseToHookResult(payload) {
 	return { action: "block", reason: "HOL Guard returned no recognized decision." };
 }
 
-function guardJsonObject(stdout) {
-	const output = stdout.trim();
+export function guardJsonObject(stdout) {
+	const output = typeof stdout === "string" ? stdout.trim() : "";
 	if (!output) return null;
 	try {
 		const value = JSON.parse(output);
-		if (value && typeof value === "object" && !Array.isArray(value)) return value;
+		return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 	} catch {
-		// Fall back to a final standalone JSON line for wrappers that add diagnostics.
-	}
-
-	const lines = output.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-	for (let i = lines.length - 1; i >= 0; i--) {
-		try {
-			const value = JSON.parse(lines[i]);
-			if (value && typeof value === "object" && !Array.isArray(value)) return value;
-		} catch {
-			// Continue scanning in case HOL Guard emitted a diagnostic line first.
+		// A diagnostic prefix may accompany exactly one machine verdict.
+		// Never allow a later echoed JSON object to override an earlier denial.
+		const verdicts = [];
+		for (const line of output.split(/\r?\n/)) {
+			try {
+				const value = JSON.parse(line.trim());
+				if (value && typeof value === "object" && !Array.isArray(value)) {
+					verdicts.push(value);
+				}
+			} catch {
+				// Ignore plain-text diagnostics, not competing structured decisions.
+			}
 		}
+		return verdicts.length === 1 ? verdicts[0] : null;
 	}
-	return null;
 }
 
 function guardArgs(command) {

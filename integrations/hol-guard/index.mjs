@@ -64,20 +64,8 @@ export function guardJsonObject(stdout) {
 		const value = JSON.parse(output);
 		return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 	} catch {
-		// A diagnostic prefix may accompany exactly one machine verdict.
-		// Never allow a later echoed JSON object to override an earlier denial.
-		const verdicts = [];
-		for (const line of output.split(/\r?\n/)) {
-			try {
-				const value = JSON.parse(line.trim());
-				if (value && typeof value === "object" && !Array.isArray(value)) {
-					verdicts.push(value);
-				}
-			} catch {
-				// Ignore plain-text diagnostics, not competing structured decisions.
-			}
-		}
-		return verdicts.length === 1 ? verdicts[0] : null;
+		// Mixed output (including diagnostics) is not one authoritative verdict.
+		return null;
 	}
 }
 

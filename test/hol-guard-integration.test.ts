@@ -6,6 +6,19 @@ import assert from "node:assert/strict";
 import { evaluateWithGuard, guardJsonObject, guardResponseToHookResult } from "../integrations/hol-guard/index.mjs";
 
 describe("HOL Guard GitAgent integration", () => {
+	it("fails closed when Node rejects the Guard argv synchronously", async () => {
+		// An embedded NUL makes child_process.spawn throw before event handlers exist.
+		// The hook must return an explicit block rather than reject its promise.
+		const result = await evaluateWithGuard(
+			{ tool: "cli", args: { command: "echo safe\\u0000unsafe" } },
+			{ binary: process.execPath, workspace: process.cwd(), timeout_ms: 1000 },
+		);
+		assert.deepEqual(result, {
+			action: "block",
+			reason: "HOL Guard could not start due to invalid process arguments.",
+		});
+	});
+
 	it("refuses multiple structured Guard verdicts, including deny followed by allow", () => {
 		const allow = JSON.stringify({ minimum_action: "allow", classification: { explicitly_benign: true } });
 		const deny = JSON.stringify({ minimum_action: "block", classification: { explicitly_benign: false } });

@@ -2,7 +2,7 @@ id: hol-guard
 name: HOL Guard
 version: 0.1.0
 description: Gate GitAgent CLI tool calls through HOL Guard before execution
-author: Hashgraph Online
+author: HOL
 license: MIT
 engine: ">=2.2.0"
 entry: index.mjs

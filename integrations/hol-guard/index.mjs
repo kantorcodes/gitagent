@@ -23,8 +23,10 @@ export function guardResponseToHookResult(payload) {
 		return { action: "block", reason: "HOL Guard returned an invalid response." };
 	}
 
-	// An explicit runtime stop overrides an otherwise allow-shaped classifier.
-	if (payload.continue === false || payload.decision === "deny") {
+	// A Guard decision other than an explicit allow must never be overridden
+	// by a contradictory benign classification or minimum_action field.
+	const decision = nonEmptyString(payload.decision)?.toLowerCase();
+	if (payload.continue === false || (decision && decision !== "allow")) {
 		return { action: "block", reason: guardReason(payload) };
 	}
 

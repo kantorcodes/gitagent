@@ -10,7 +10,7 @@ describe("HOL Guard GitAgent integration", () => {
 		// An embedded NUL makes child_process.spawn throw before event handlers exist.
 		// The hook must return an explicit block rather than reject its promise.
 		const result = await evaluateWithGuard(
-			{ tool: "cli", args: { command: "echo safe\\u0000unsafe" } },
+			{ tool: "cli", args: { command: "echo safe\u0000unsafe" } },
 			{ binary: process.execPath, workspace: process.cwd(), timeout_ms: 1000 },
 		);
 		assert.deepEqual(result, {

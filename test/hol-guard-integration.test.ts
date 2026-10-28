@@ -19,16 +19,22 @@ describe("HOL Guard GitAgent integration", () => {
 		});
 	});
 
-	it("refuses multiple structured Guard verdicts, including deny followed by allow", () => {
+	it("accepts one JSON verdict and refuses diagnostic or competing stdout", () => {
 		const allow = JSON.stringify({ minimum_action: "allow", classification: { explicitly_benign: true } });
 		const deny = JSON.stringify({ minimum_action: "block", classification: { explicitly_benign: false } });
-		assert.deepEqual(guardJsonObject("diagnostic\n" + allow), JSON.parse(allow));
-		for (const output of [deny + "\n" + allow, allow + "\n" + deny, allow + "\n" + allow]) {
+		assert.deepEqual(guardJsonObject(" \n" + allow + "\n "), JSON.parse(allow));
+		for (const output of [
+			"diagnostic\n" + allow,
+			allow + "\ndiagnostic",
+			deny + "\n" + allow,
+			allow + "\n" + deny,
+			allow + "\n" + allow,
+		]) {
 			assert.equal(guardJsonObject(output), null);
 		}
 	});
 
-	it("maps Guard command floors to GitAgent hook results", () => {
+		it("maps Guard command floors to GitAgent hook results", () => {
 		assert.deepEqual(
 			guardResponseToHookResult({
 				minimum_action: "allow",

@@ -80,6 +80,11 @@ describe("HOL Guard GitAgent integration", () => {
 			{ policy_action: "review" },
 			{ policy_action: "warn" },
 			{ policy_action: null },
+			{ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny" } },
+			{ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask" } },
+			{ hookSpecificOutput: { hookEventName: "PostToolUse", permissionDecision: "allow" } },
+			{ hookSpecificOutput: { permissionDecision: "allow" } },
+			{ hookSpecificOutput: null },
 		]) {
 			assert.equal(
 				guardResponseToHookResult({
@@ -94,6 +99,12 @@ describe("HOL Guard GitAgent integration", () => {
 			policy_action: "not_run",
 			minimum_action: "allow",
 			classification: { explicitly_benign: true },
+		}).action, "allow");
+		assert.equal(guardResponseToHookResult({
+			policy_action: "not_run",
+			minimum_action: "allow",
+			classification: { explicitly_benign: true },
+			hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
 		}).action, "allow");
 		assert.equal(guardResponseToHookResult({ minimum_action: "block" }).action, "block");
 		assert.equal(guardResponseToHookResult({ unexpected: true }).action, "block");

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { isAbsolute } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 6000;
 const MAX_GUARD_OUTPUT_BYTES = 1024 * 1024;
@@ -86,7 +87,12 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
 		? configuredTimeout
 		: DEFAULT_TIMEOUT_MS;
-	const workspace = nonEmptyString(config.workspace) || process.cwd();
+	const workspace = nonEmptyString(config.workspace);
+	// The builtin cli tool executes in the agent directory, which need not be
+	// process.cwd(). Fail closed rather than inspect a different checkout.
+	if (!workspace || !isAbsolute(workspace)) {
+		return { action: "block", reason: "HOL Guard needs an absolute workspace matching the agent cli directory." };
+	}
 	const childEnv = { ...process.env };
 	const guardHome = nonEmptyString(config.guard_home);
 	if (guardHome) childEnv.HOL_GUARD_HOME = guardHome;

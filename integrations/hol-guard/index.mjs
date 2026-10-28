@@ -26,7 +26,9 @@ export function guardResponseToHookResult(payload) {
 	// A Guard decision other than an explicit allow must never be overridden
 	// by a contradictory benign classification or minimum_action field.
 	const decision = nonEmptyString(payload.decision)?.toLowerCase();
-	if (payload.continue === false || (decision && decision !== "allow")) {
+	const continuationStopped = Object.prototype.hasOwnProperty.call(payload, "continue") && payload.continue !== true;
+	const decisionStopped = Object.prototype.hasOwnProperty.call(payload, "decision") && decision !== "allow";
+	if (continuationStopped || decisionStopped) {
 		return { action: "block", reason: guardReason(payload) };
 	}
 

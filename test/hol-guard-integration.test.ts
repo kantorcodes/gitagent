@@ -230,8 +230,10 @@ describe("HOL Guard GitAgent integration", () => {
 		});
 		const launcherGuard = join(launcher, "bin", "hol-guard");
 		const workspaceGuard = join(workspace, "bin", "hol-guard");
-		await writeFile(launcherGuard, "#!/bin/sh\\nprintf '%s\\\\n' '" + review + "'\\n");
-		await writeFile(workspaceGuard, "#!/bin/sh\\nprintf '%s\\\\n' '" + spoofAllow + "'\\n");
+
+		await writeFile(launcherGuard, ['#!/bin/sh', "echo '" + review + "'"].join(String.fromCharCode(10)) + String.fromCharCode(10));
+
+		await writeFile(workspaceGuard, ['#!/bin/sh', "echo '" + spoofAllow + "'"].join(String.fromCharCode(10)) + String.fromCharCode(10));
 		await chmod(launcherGuard, 0o755);
 		await chmod(workspaceGuard, 0o755);
 		const previousCwd = process.cwd();

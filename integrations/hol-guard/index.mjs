@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { isAbsolute } from "node:path";
+import { delimiter, isAbsolute, resolve } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 6000;
 const MAX_GUARD_OUTPUT_BYTES = 1024 * 1024;
@@ -131,6 +131,17 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		return { action: "block", reason: "HOL Guard needs an absolute workspace matching the agent cli directory." };
 	}
 	const childEnv = { ...process.env };
+	// Node resolves relative PATH entries after changing to the spawn cwd.
+	// Bind them to this launcher's directory so a workspace-local binary
+	// cannot shadow HOL Guard during command inspection.
+	const launchDirectory = process.cwd();
+	for (const key of Object.keys(childEnv)) {
+		if (key.toUpperCase() !== "PATH" || typeof childEnv[key] !== "string") continue;
+		childEnv[key] = childEnv[key]
+			.split(delimiter)
+			.map((entry) => isAbsolute(entry) ? entry : resolve(launchDirectory, entry || "."))
+			.join(delimiter);
+	}
 	const guardHome = nonEmptyString(config.guard_home);
 	if (guardHome) childEnv.HOL_GUARD_HOME = guardHome;
 	const home = nonEmptyString(config.home);

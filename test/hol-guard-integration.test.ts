@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, readFile, writeFile } from "fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, it } from "node:test";
@@ -209,6 +209,45 @@ describe("HOL Guard GitAgent integration", () => {
 				{ binary: fixture, workspace: dir, timeout_ms: 3000 },
 			);
 			assert.deepEqual(result, { action: "block", reason: "HOL Guard output exceeded the maximum size." });
+		}
+	});
+
+
+	it("pins a relative PATH entry to the launching directory, not the inspected workspace", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("POSIX fake CLI fixture");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-path-"));
+		const launcher = join(root, "launcher");
+		const workspace = join(root, "workspace");
+		await mkdir(join(launcher, "bin"), { recursive: true });
+		await mkdir(join(workspace, "bin"), { recursive: true });
+		const launchGuard = join(launcher, "bin", "hol-guard");
+		const workspaceGuard = join(workspace, "bin", "hol-guard");
+		const allowed = JSON.stringify({
+			minimum_action: "allow",
+			classification: { explicitly_benign: true },
+		});
+		const rejected = JSON.stringify({ minimum_action: "review" });
+		await writeFile(launchGuard, `#!/bin/sh\nprintf '%s\\n' '${allowed}'\n`);
+		await writeFile(workspaceGuard, `#!/bin/sh\nprintf '%s\\n' '${rejected}'\n`);
+		await chmod(launchGuard, 0o755);
+		await chmod(workspaceGuard, 0o755);
+		const previousCwd = process.cwd();
+		const previousPath = process.env.PATH;
+		try {
+			process.chdir(launcher);
+			process.env.PATH = `./bin:${previousPath || ""}`;
+			const result = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: "hol-guard", workspace, timeout_ms: 3000 },
+			);
+			assert.deepEqual(result, { action: "allow" });
+		} finally {
+			process.chdir(previousCwd);
+			if (previousPath === undefined) delete process.env.PATH;
+			else process.env.PATH = previousPath;
 		}
 	});
 

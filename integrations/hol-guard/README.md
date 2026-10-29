@@ -28,7 +28,7 @@ Configuration fields in `plugin.yaml` include `binary` (or `HOL_GUARD_BIN`), `wo
 
 Only the GitAgent tool named `cli` is checked. Read, write, MCP, plugin tools and any other execution surfaces are **not** automatically covered by this integration. An explicit allow for an unrelated tool simply leaves that tool to other GitAgent hooks; it is not a Guard authorization.
 
-GitAgent's host hook runner currently logs thrown hook errors and continues, so this plugin handles subprocess and parsing failures as ordinary `block` results. An unexpected failure outside the adapter's own handlers or a hook-runtime failure may still result in unguarded execution. Do not treat this optional example as a universal security boundary. For native Guard policy, approvals and receipts, use a [supported harness](https://github.com/hashgraph-online/hol-guard/blob/main/docs/guard/harness-support.md).
+GitAgent's host hook runner logs thrown hook errors and continues, so this plugin returns explicit `block` results for subprocess, parsing, and unexpected errors from its own registered callback. A failure in GitAgent's hook runner before or outside that callback may still result in unguarded execution. Do not treat this optional example as a universal security boundary. For native Guard policy, approvals and receipts, use a [supported harness](https://github.com/hashgraph-online/hol-guard/blob/main/docs/guard/harness-support.md).
 
 ## Verify the example
 

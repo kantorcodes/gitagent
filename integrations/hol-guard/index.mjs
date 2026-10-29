@@ -119,7 +119,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		return { action: "block", reason: "HOL Guard could not inspect a cli command." };
 	}
 
-	const binary = nonEmptyString(config.binary) || process.env.HOL_GUARD_BIN || "hol-guard";
+	const configuredBinary = nonEmptyString(config.binary) || nonEmptyString(process.env.HOL_GUARD_BIN) || "hol-guard";
 	const configuredTimeout = Number(config.timeout_ms);
 	const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
 		? configuredTimeout
@@ -135,6 +135,11 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	// Bind them to this launcher's directory so a workspace-local binary
 	// cannot shadow HOL Guard during command inspection.
 	const launchDirectory = process.cwd();
+	// A configured relative executable path must not be interpreted inside the
+	// untrusted CLI workspace after spawn changes cwd. Bare names still use PATH.
+	const binary = configuredBinary.includes("/") || configuredBinary.includes("\\")
+		? resolve(launchDirectory, configuredBinary)
+		: configuredBinary;
 	for (const key of Object.keys(childEnv)) {
 		if (key.toUpperCase() !== "PATH" || typeof childEnv[key] !== "string") continue;
 		childEnv[key] = childEnv[key]

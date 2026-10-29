@@ -34,6 +34,23 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
+	it("rejects duplicate keys before honoring an allow-shaped verdict", () => {
+		const contradictory = [
+			'{"decision":"deny","decision":"allow","minimum_action":"allow","classification":{"explicitly_benign":true}}',
+			'{"minimum_action":"block","minimum_action":"allow","classification":{"explicitly_benign":true}}',
+			'{"minimum_action":"allow","classification":{"explicitly_benign":false,"explicitly_benign":true}}',
+			'{"dec\\u0069sion":"deny","decision":"allow","minimum_action":"allow","classification":{"explicitly_benign":true}}',
+			'{"minimum_action":"allow","classification":{"explicitly_benign":true},"metadata":{"reason":"review","reason":"allow"}}',
+		];
+		for (const output of contradictory) {
+			assert.equal(guardJsonObject(output), null);
+			assert.equal(guardResponseToHookResult(guardJsonObject(output)).action, "block");
+		}
+		// Repeated strings are fine inside arrays, and an escaped quote is not a key delimiter.
+		const valid = '{"notes":["same","same"],"metadata":{"comment":"quoted \\"key\\""},"minimum_action":"allow","classification":{"explicitly_benign":true}}';
+		assert.deepEqual(guardJsonObject(valid), JSON.parse(valid));
+	});
+
 		it("maps Guard command floors to GitAgent hook results", () => {
 		assert.deepEqual(
 			guardResponseToHookResult({

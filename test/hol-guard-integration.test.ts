@@ -213,6 +213,40 @@ describe("HOL Guard GitAgent integration", () => {
 	});
 
 
+	it("uses the launch directory for a configured relative Guard executable", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("POSIX executable fixtures");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "gitagent-guard-relative-bin-"));
+		const launcher = join(root, "launcher");
+		const workspace = join(root, "workspace");
+		await mkdir(join(launcher, "bin"), { recursive: true });
+		await mkdir(join(workspace, "bin"), { recursive: true });
+		const review = JSON.stringify({ minimum_action: "review" });
+		const spoofAllow = JSON.stringify({
+			minimum_action: "allow",
+			classification: { explicitly_benign: true },
+		});
+		const launcherGuard = join(launcher, "bin", "hol-guard");
+		const workspaceGuard = join(workspace, "bin", "hol-guard");
+		await writeFile(launcherGuard, "#!/bin/sh\\nprintf '%s\\\\n' '" + review + "'\\n");
+		await writeFile(workspaceGuard, "#!/bin/sh\\nprintf '%s\\\\n' '" + spoofAllow + "'\\n");
+		await chmod(launcherGuard, 0o755);
+		await chmod(workspaceGuard, 0o755);
+		const previousCwd = process.cwd();
+		try {
+			process.chdir(launcher);
+			const result = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: "./bin/hol-guard", workspace, timeout_ms: 3000 },
+			);
+			assert.equal(result.action, "block");
+		} finally {
+			process.chdir(previousCwd);
+		}
+	});
+
 	it("pins a relative PATH entry to the launching directory, not the inspected workspace", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("POSIX fake CLI fixture");

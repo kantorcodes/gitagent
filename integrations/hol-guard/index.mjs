@@ -58,10 +58,47 @@ export function guardResponseToHookResult(payload) {
 	return { action: "block", reason: "HOL Guard returned no recognized decision." };
 }
 
+// JSON.parse uses the last value for repeated keys. Reject duplicates before
+// parsing so a later "allow" cannot replace an earlier stop, even when an
+// escaped key or a nested classification field is involved.
+function hasDuplicateJsonObjectKeys(source) {
+	const frames = [];
+	for (let i = 0; i < source.length;) {
+		const ch = source[i];
+		if (ch === '"') {
+			const start = i++;
+			while (i < source.length) {
+				if (source[i] === "\\") {
+					i += 2;
+					continue;
+				}
+				if (source[i++] === '"') break;
+			}
+			const frame = frames[frames.length - 1];
+			if (frame?.isObject && frame.expectKey) {
+				const key = JSON.parse(source.slice(start, i));
+				if (frame.keys.has(key)) return true;
+				frame.keys.add(key);
+				frame.expectKey = false;
+			}
+			continue;
+		}
+		if (ch === "{") frames.push({ isObject: true, expectKey: true, keys: new Set() });
+		else if (ch === "[") frames.push({ isObject: false });
+		else if (ch === "}" || ch === "]") frames.pop();
+		else if (ch === "," && frames[frames.length - 1]?.isObject) {
+			frames[frames.length - 1].expectKey = true;
+		}
+		i++;
+	}
+	return false;
+}
+
 export function guardJsonObject(stdout) {
 	const output = typeof stdout === "string" ? stdout.trim() : "";
 	if (!output) return null;
 	try {
+		if (hasDuplicateJsonObjectKeys(output)) return null;
 		const value = JSON.parse(output);
 		return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 	} catch {

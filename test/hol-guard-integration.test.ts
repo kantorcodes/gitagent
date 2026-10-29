@@ -3,9 +3,33 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateWithGuard, guardJsonObject, guardResponseToHookResult } from "../integrations/hol-guard/index.mjs";
+import { evaluateWithGuard, guardJsonObject, guardResponseToHookResult, register } from "../integrations/hol-guard/index.mjs";
 
 describe("HOL Guard GitAgent integration", () => {
+	it("blocks an unexpected programmatic hook exception instead of allowing the cli tool", async () => {
+		let registeredHook;
+		await register({
+			config: { workspace: process.cwd() },
+			registerHook(event, handler) {
+				assert.equal(event, "pre_tool_use");
+				registeredHook = handler;
+			},
+		});
+		assert.equal(typeof registeredHook, "function");
+
+		// GitAgent's host runHooks logs thrown programmatic-hook errors and
+		// continues the tool. The Guard handler must convert errors to a block.
+		const invalidContext = {
+			get tool() {
+				throw new Error("unexpected hook context failure");
+			},
+		};
+		assert.deepEqual(await registeredHook(invalidContext), {
+			action: "block",
+			reason: "HOL Guard could not complete the pre-tool check.",
+		});
+	});
+
 	it("fails closed when Node rejects the Guard argv synchronously", async () => {
 		// An embedded NUL makes child_process.spawn throw before event handlers exist.
 		// The hook must return an explicit block rather than reject its promise.

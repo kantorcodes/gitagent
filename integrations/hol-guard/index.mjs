@@ -202,5 +202,13 @@ export async function evaluateWithGuard(ctx, config = {}) {
 }
 
 export async function register(api) {
-	api.registerHook("pre_tool_use", async (ctx) => evaluateWithGuard(ctx, api.config));
+	api.registerHook("pre_tool_use", async (ctx) => {
+		try {
+			return await evaluateWithGuard(ctx, api.config);
+		} catch {
+			// GitAgent's hook runner logs unexpected exceptions and otherwise allows the
+			// tool. Never let an internal adapter failure bypass this security gate.
+			return { action: "block", reason: "HOL Guard could not complete the pre-tool check." };
+		}
+	});
 }

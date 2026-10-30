@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
+import { TextDecoder } from "node:util";
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 6000;
@@ -195,8 +196,8 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	if (home) childEnv.HOME = home;
 
 	return new Promise((resolve) => {
-		let stdout = "";
-		let stderr = "";
+		const stdoutChunks = [];
+		const stderrChunks = [];
 		let outputBytes = 0;
 		let settled = false;
 		let child;
@@ -237,8 +238,10 @@ export async function evaluateWithGuard(ctx, config = {}) {
 				finish({ action: "block", reason: "HOL Guard output exceeded the maximum size." });
 				return;
 			}
-			if (stream === "stdout") stdout += chunk.toString("utf-8");
-			else stderr += chunk.toString("utf-8");
+			// Decode only after all chunks arrive. Per-chunk UTF-8 conversion
+			// could silently replace malformed bytes in an allow-shaped verdict.
+			if (stream === "stdout") stdoutChunks.push(chunk);
+			else stderrChunks.push(chunk);
 		};
 		child.stdout.on("data", (chunk) => captureOutput(chunk, "stdout"));
 		child.stderr.on("data", (chunk) => captureOutput(chunk, "stderr"));
@@ -250,8 +253,15 @@ export async function evaluateWithGuard(ctx, config = {}) {
 			if (code !== 0) {
 				finish({
 					action: "block",
-					reason: nonEmptyString(stderr) || `HOL Guard exited with code ${code}.`,
+					reason: nonEmptyString(Buffer.concat(stderrChunks).toString("utf-8")) || `HOL Guard exited with code ${code}.`,
 				});
+				return;
+			}
+			let stdout;
+			try {
+				stdout = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(stdoutChunks));
+			} catch {
+				finish({ action: "block", reason: "HOL Guard output was not valid UTF-8." });
 				return;
 			}
 			finish(guardResponseToHookResult(guardJsonObject(stdout)));

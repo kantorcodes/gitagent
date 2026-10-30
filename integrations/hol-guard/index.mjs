@@ -149,6 +149,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		? resolve(launchDirectory, configuredBinary)
 		: configuredBinary;
 	let realWorkspace;
+	let realLaunchWorktree;
 	try {
 		const initialWorkspace = realpathSync(workspace);
 		// GitAgent can execute from a nested directory. PATH entries in the
@@ -157,6 +158,15 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		let cursor = initialWorkspace;
 		while (true) {
 			if (existsSync(join(cursor, ".git"))) realWorkspace = cursor;
+			const parent = dirname(cursor);
+			if (parent === cursor) break;
+			cursor = parent;
+		}
+		// A different launch checkout can also put forged binaries on PATH.
+		cursor = realpathSync(launchDirectory);
+		realLaunchWorktree = cursor;
+		while (true) {
+			if (existsSync(join(cursor, ".git"))) realLaunchWorktree = cursor;
 			const parent = dirname(cursor);
 			if (parent === cursor) break;
 			cursor = parent;
@@ -174,10 +184,10 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		} catch {
 			return { action: "block", reason: "HOL Guard executable path could not be verified." };
 		}
-		const withinWorktree = (candidate) => {
-			const rel = relative(realWorkspace, candidate);
+		const withinWorktree = (candidate) => [realWorkspace, realLaunchWorktree].some((root) => {
+			const rel = relative(root, candidate);
 			return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
-		};
+		});
 		if (withinWorktree(binary) || withinWorktree(realBinary)) {
 			return { action: "block", reason: "HOL Guard executable is controlled by the cli worktree." };
 		}
@@ -197,13 +207,27 @@ export async function evaluateWithGuard(ctx, config = {}) {
 				} catch {
 					return null;
 				}
-				const outsideWorkspace = (candidate) => {
-					const within = relative(realWorkspace, candidate);
+				const outsideWorkspace = (candidate) => [realWorkspace, realLaunchWorktree].every((root) => {
+					const within = relative(root, candidate);
 					return within !== "" && (
 						within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)
 					);
-				};
-				return outsideWorkspace(entry) && outsideWorkspace(realEntry) ? realEntry : null;
+				});
+				if (!outsideWorkspace(entry) || !outsideWorkspace(realEntry)) return null;
+				// A globally located PATH directory can still contain a symlinked
+				// hol-guard executable pointing into an untrusted checkout.
+				for (const executableName of process.platform === "win32"
+					? ["hol-guard.exe", "hol-guard.cmd", "hol-guard.bat", "hol-guard"]
+					: ["hol-guard"]) {
+					const executable = join(realEntry, executableName);
+					try {
+						const target = realpathSync(executable);
+						if (!outsideWorkspace(executable) || !outsideWorkspace(target)) return null;
+					} catch (error) {
+						if (error?.code !== "ENOENT") return null;
+					}
+				}
+				return realEntry;
 			})
 			.filter((entry) => entry !== null)
 			.join(delimiter);

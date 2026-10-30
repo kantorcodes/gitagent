@@ -30,6 +30,15 @@ describe("HOL Guard GitAgent integration", () => {
 		});
 	});
 
+	it("blocks a missing or malformed tool identity instead of treating it as unrelated", async () => {
+		for (const ctx of [undefined, null, {}, { tool: null }, { tool: "" }, { tool: 0 }]) {
+			assert.deepEqual(await evaluateWithGuard(ctx, { binary: "missing-guard" }), {
+				action: "block",
+				reason: "HOL Guard could not identify the tool being called.",
+			});
+		}
+	});
+
 	it("fails closed when Node rejects the Guard argv synchronously", async () => {
 		// An embedded NUL makes child_process.spawn throw before event handlers exist.
 		// The hook must return an explicit block rather than reject its promise.

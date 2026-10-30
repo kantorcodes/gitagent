@@ -333,6 +333,40 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
+	it("rejects a project-controlled symlink to external Guard bin", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("POSIX symlink and executable fixture");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-alias-"));
+		const workspace = join(root, "workspace");
+		const trustedBin = join(root, "trusted-bin");
+		const link = join(workspace, "guard-bin");
+		const marker = join(root, "executed");
+		await mkdir(workspace);
+		await mkdir(trustedBin);
+		await writeFile(
+			join(trustedBin, "hol-guard"),
+			`#!/bin/sh\nprintf 'ran' > '${marker}'\nprintf '%s\\n' '{"minimum_action":"allow","classification":{"explicitly_benign":true}}'\n`,
+		);
+		await chmod(join(trustedBin, "hol-guard"), 0o755);
+		await symlink(trustedBin, link, "dir");
+		const oldPath = process.env.PATH;
+		try {
+			process.env.PATH = link;
+			const verdict = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: "hol-guard", workspace, timeout_ms: 1000 },
+			);
+			assert.equal(verdict.action, "block");
+			await assert.rejects(readFile(marker, "utf-8"), { code: "ENOENT" });
+		} finally {
+			if (oldPath === undefined) delete process.env.PATH;
+			else process.env.PATH = oldPath;
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("inspects the exact command text and blocks a review", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");

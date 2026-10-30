@@ -202,7 +202,7 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	const home = nonEmptyString(config.home);
 	if (home) childEnv.HOME = home;
 
-	return new Promise((resolve) => {
+	const verdict = await new Promise((resolve) => {
 		const stdoutChunks = [];
 		const stderrChunks = [];
 		let outputBytes = 0;
@@ -274,6 +274,13 @@ export async function evaluateWithGuard(ctx, config = {}) {
 			finish(guardResponseToHookResult(guardJsonObject(stdout)));
 		});
 	});
+	// GitAgent passes the hook the same args object its CLI will execute. If
+	// another async callback replaces it while Guard is inspecting, an old
+	// benign verdict must not authorize the substituted tool or command.
+	if (ctx?.tool !== "cli" || ctx?.args?.command !== command) {
+		return { action: "block", reason: "HOL Guard tool input changed during inspection." };
+	}
+	return verdict;
 }
 
 export async function register(api) {

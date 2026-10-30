@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
-import { delimiter, isAbsolute, relative, resolve, sep } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 6000;
 const MAX_GUARD_OUTPUT_BYTES = 1024 * 1024;
@@ -149,7 +149,17 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		: configuredBinary;
 	let realWorkspace;
 	try {
-		realWorkspace = realpathSync(workspace);
+		const initialWorkspace = realpathSync(workspace);
+		// GitAgent can execute from a nested directory. PATH entries in the
+		// parent Git checkout are just as untrusted as those under cwd.
+		realWorkspace = initialWorkspace;
+		let cursor = initialWorkspace;
+		while (true) {
+			if (existsSync(join(cursor, ".git"))) realWorkspace = cursor;
+			const parent = dirname(cursor);
+			if (parent === cursor) break;
+			cursor = parent;
+		}
 	} catch {
 		return { action: "block", reason: "HOL Guard could not verify the cli workspace." };
 	}

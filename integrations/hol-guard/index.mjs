@@ -158,21 +158,25 @@ export async function evaluateWithGuard(ctx, config = {}) {
 		childEnv[key] = childEnv[key]
 			.split(delimiter)
 			.map((entry) => isAbsolute(entry) ? entry : resolve(launchDirectory, entry || "."))
-			.filter((entry) => {
-				// Absolute PATH entries (and symlinks) may still point into the
-				// untrusted workspace. Never discover Guard from project-owned bins.
-				// Unresolvable entries are also omitted: they cannot be trusted.
+			.map((entry) => {
+				// Check both the selected PATH alias and its resolved directory.
+				// A project-owned symlink can otherwise point outside the checkout
+				// until an attacker swaps it for a forged executable at spawn time.
 				let realEntry;
 				try {
 					realEntry = realpathSync(entry);
 				} catch {
-					return false;
+					return null;
 				}
-				const within = relative(realWorkspace, realEntry);
-				return within !== "" && (
-					within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)
-				);
+				const outsideWorkspace = (candidate) => {
+					const within = relative(realWorkspace, candidate);
+					return within !== "" && (
+						within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)
+					);
+				};
+				return outsideWorkspace(entry) && outsideWorkspace(realEntry) ? realEntry : null;
 			})
+			.filter((entry) => entry !== null)
 			.join(delimiter);
 	}
 	const guardHome = nonEmptyString(config.guard_home);

@@ -113,7 +113,13 @@ function guardArgs(command) {
 }
 
 export async function evaluateWithGuard(ctx, config = {}) {
-	if (ctx?.tool !== "cli") return { action: "allow" };
+	// A missing or malformed tool identity is not evidence of an unrelated tool.
+	// Host hooks can otherwise fail open before Guard sees the pending cli action.
+	const tool = ctx?.tool;
+	if (typeof tool !== "string" || !tool.trim()) {
+		return { action: "block", reason: "HOL Guard could not identify the tool being called." };
+	}
+	if (tool !== "cli") return { action: "allow" };
 	// Inspect the exact command GitAgent will execute; trimming can change shell/heredoc input.
 	const command = ctx?.args?.command;
 	if (typeof command !== "string" || !command.trim()) {

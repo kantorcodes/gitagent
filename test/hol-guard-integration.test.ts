@@ -467,6 +467,41 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
+
+	it("rejects a changed CLI command while Guard is inspecting", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("fixture executable uses a POSIX shebang");
+			return;
+		}
+		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-mutate-"));
+		const fixture = join(dir, "delayed-guard.mjs");
+		await writeFile(fixture, [
+			"#!/usr/bin/env node",
+			"setTimeout(() => process.stdout.write(JSON.stringify({minimum_action:'allow',classification:{explicitly_benign:true}})+'\\n'), 80);",
+		].join("\n") + "\n");
+		await chmod(fixture, 0o755);
+		try {
+			for (const mutation of [
+				(context) => { context.args.command = "rm -rf ./workspace"; },
+				(context) => { context.tool = "read"; },
+			]) {
+				const context = { tool: "cli", args: { command: "git status" } };
+				const pending = evaluateWithGuard(context, {
+					binary: fixture,
+					workspace: dir,
+					timeout_ms: 3000,
+				});
+				mutation(context);
+				assert.deepEqual(await pending, {
+					action: "block",
+					reason: "HOL Guard tool input changed during inspection.",
+				});
+			}
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("inspects the exact command text and blocks a review", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");

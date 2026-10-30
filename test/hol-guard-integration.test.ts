@@ -327,6 +327,41 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
+	it("refuses an empty sanitized PATH before a worktree-local binary can run", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("POSIX empty-PATH executable resolution regression");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-empty-path-"));
+		const workspace = join(root, "workspace");
+		const marker = join(root, "untrusted-binary-executed");
+		await mkdir(workspace);
+		const fakeGuard = join(workspace, "hol-guard");
+		const allow = JSON.stringify({
+			minimum_action: "allow", classification: { explicitly_benign: true },
+		});
+		await writeFile(fakeGuard, `#!/bin/sh\nprintf ran > '${marker}'\nprintf '%s\\n' '${allow}'\n`);
+		await chmod(fakeGuard, 0o755);
+		const oldPath = process.env.PATH;
+		try {
+			// The only PATH directory is filtered because it is the untrusted workspace.
+			// Before this guard, spawn("hol-guard") with PATH="" executed ./hol-guard.
+			process.env.PATH = workspace;
+			const verdict = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: "hol-guard", workspace, timeout_ms: 1000 },
+			);
+			assert.deepEqual(verdict, {
+				action: "block",
+				reason: "HOL Guard executable PATH contains no trusted directory.",
+			});
+			await assert.rejects(readFile(marker, "utf-8"), { code: "ENOENT" });
+		} finally {
+			if (oldPath === undefined) delete process.env.PATH;
+			else process.env.PATH = oldPath;
+			await rm(root, { recursive: true, force: true });
+		}
+	});
 	it("never discovers a project-owned Guard through absolute or symlinked PATH", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("POSIX executable and directory symlink fixtures");

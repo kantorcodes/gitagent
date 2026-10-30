@@ -164,6 +164,24 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	} catch {
 		return { action: "block", reason: "HOL Guard could not verify the cli workspace." };
 	}
+	// Explicit binary paths bypass PATH sanitization. Reject executables in
+	// the untrusted CLI worktree, including a worktree-controlled symlink
+	// pointing to a trusted-looking external executable.
+	if (binary.includes("/") || binary.includes("\\")) {
+		let realBinary;
+		try {
+			realBinary = realpathSync(binary);
+		} catch {
+			return { action: "block", reason: "HOL Guard executable path could not be verified." };
+		}
+		const withinWorktree = (candidate) => {
+			const rel = relative(realWorkspace, candidate);
+			return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+		};
+		if (withinWorktree(binary) || withinWorktree(realBinary)) {
+			return { action: "block", reason: "HOL Guard executable is controlled by the cli worktree." };
+		}
+	}
 	for (const key of Object.keys(childEnv)) {
 		if (key.toUpperCase() !== "PATH" || typeof childEnv[key] !== "string") continue;
 		childEnv[key] = childEnv[key]

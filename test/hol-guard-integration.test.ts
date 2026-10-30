@@ -199,6 +199,37 @@ describe("HOL Guard GitAgent integration", () => {
 		);
 	});
 
+	it("blocks invalid UTF-8 bytes in an otherwise allow-shaped Guard verdict", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("fixture executable uses a POSIX shebang");
+			return;
+		}
+		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-utf8-"));
+		try {
+			const fixture = join(dir, "bad-utf8-guard.mjs");
+			const verdict = JSON.stringify({
+				minimum_action: "allow",
+				classification: { explicitly_benign: true },
+				diagnostic: "ok",
+			});
+			const fixtureCode = [
+				"#!/usr/bin/env node",
+				`const verdict = ${JSON.stringify(verdict)};`,
+				'const idx = verdict.lastIndexOf("ok");',
+				"process.stdout.write(Buffer.concat([Buffer.from(verdict.slice(0, idx)), Buffer.from([0xff]), Buffer.from(verdict.slice(idx + 2))]));",
+			].join("\n") + "\n";
+			await writeFile(fixture, fixtureCode, "utf8");
+			await chmod(fixture, 0o755);
+			const result = await evaluateWithGuard(
+				{ tool: "cli", args: { command: "git status" } },
+				{ binary: fixture, workspace: dir, timeout_ms: 3000 },
+			);
+			assert.deepEqual(result, { action: "block", reason: "HOL Guard output was not valid UTF-8." });
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	it("blocks oversized Guard output even when followed by an allow verdict", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");

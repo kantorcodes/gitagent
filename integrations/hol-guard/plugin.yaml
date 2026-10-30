@@ -23,8 +23,10 @@ config:
       description: Optional home directory passed to HOL Guard
     workspace:
       type: string
-      description: Workspace path evaluated by HOL Guard
+      description: Absolute directory in which GitAgent cli commands actually execute
+      env: HOL_GUARD_WORKSPACE
     timeout_ms:
       type: number
       description: Maximum time to wait for a Guard decision
       default: 6000
+  required: [workspace]

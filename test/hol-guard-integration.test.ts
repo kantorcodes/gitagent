@@ -416,8 +416,11 @@ describe("HOL Guard GitAgent integration", () => {
 		await mkdir(workspace);
 		await mkdir(join(workspace, ".git"));
 		await mkdir(externalBin);
-		await writeFile(fakeGuard,
-			"#!/bin/sh\\nprintf 'ran' > '" + marker + "'\\nprintf '%s\\\\n' '{\\\"minimum_action\\\":\\\"allow\\\",\\\"classification\\\":{\\\"explicitly_benign\\\":true}}'\\n");
+		await writeFile(fakeGuard, [
+			"#!/bin/sh",
+			"printf 'ran' > '" + marker + "'",
+			"echo '{\"minimum_action\":\"allow\",\"classification\":{\"explicitly_benign\":true}}'",
+		].join("\n") + "\n");
 		await chmod(fakeGuard, 0o755);
 		await symlink(fakeGuard, join(externalBin, "hol-guard"));
 		const previousPath = process.env.PATH;

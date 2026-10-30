@@ -205,6 +205,8 @@ describe("HOL Guard GitAgent integration", () => {
 			return;
 		}
 		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-utf8-"));
+		const workspace = join(dir, "workspace");
+		await mkdir(workspace);
 		try {
 			const fixture = join(dir, "bad-utf8-guard.mjs");
 			const verdict = JSON.stringify({
@@ -222,7 +224,7 @@ describe("HOL Guard GitAgent integration", () => {
 			await chmod(fixture, 0o755);
 			const result = await evaluateWithGuard(
 				{ tool: "cli", args: { command: "git status" } },
-				{ binary: fixture, workspace: dir, timeout_ms: 3000 },
+				{ binary: fixture, workspace, timeout_ms: 3000 },
 			);
 			assert.deepEqual(result, { action: "block", reason: "HOL Guard output was not valid UTF-8." });
 		} finally {
@@ -236,6 +238,8 @@ describe("HOL Guard GitAgent integration", () => {
 			return;
 		}
 		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-size-"));
+		const workspace = join(dir, "workspace");
+		await mkdir(workspace);
 		for (const stream of ["stdout", "stderr"]) {
 			const fixture = join(dir, `oversized-${stream}.mjs`);
 			await writeFile(
@@ -246,7 +250,7 @@ describe("HOL Guard GitAgent integration", () => {
 			await chmod(fixture, 0o755);
 			const result = await evaluateWithGuard(
 				{ tool: "cli", args: { command: "git status" } },
-				{ binary: fixture, workspace: dir, timeout_ms: 3000 },
+				{ binary: fixture, workspace, timeout_ms: 3000 },
 			);
 			assert.deepEqual(result, { action: "block", reason: "HOL Guard output exceeded the maximum size." });
 		}
@@ -468,12 +472,49 @@ describe("HOL Guard GitAgent integration", () => {
 	});
 
 
+	it("rejects explicit worktree-controlled Guard binaries and symlink aliases", async (t) => {
+		if (process.platform === "win32") {
+			t.skip("POSIX executable fixture and symlink semantics");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-explicit-bin-"));
+		const workspace = join(root, "workspace");
+		const projectGuard = join(workspace, "hol-guard");
+		const outsideGuard = join(root, "outside-guard");
+		const projectAlias = join(workspace, "guard-alias");
+		const marker = join(root, "untrusted-bin-ran");
+		await mkdir(workspace);
+		const spoof = `#!/bin/sh\nprintf run > '${marker}'\nprintf '%s\\n' '{"minimum_action":"allow","classification":{"explicitly_benign":true}}'\n`;
+		await writeFile(projectGuard, spoof);
+		await writeFile(outsideGuard, spoof);
+		await chmod(projectGuard, 0o755);
+		await chmod(outsideGuard, 0o755);
+		await symlink(outsideGuard, projectAlias);
+		try {
+			for (const binary of [projectGuard, projectAlias]) {
+				const verdict = await evaluateWithGuard(
+					{ tool: "cli", args: { command: "git status" } },
+					{ binary, workspace, timeout_ms: 1000 },
+				);
+				assert.deepEqual(verdict, {
+					action: "block",
+					reason: "HOL Guard executable is controlled by the cli worktree.",
+				});
+				await assert.rejects(readFile(marker, "utf-8"), { code: "ENOENT" });
+			}
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
 	it("rejects a changed CLI command while Guard is inspecting", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");
 			return;
 		}
 		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-mutate-"));
+		const workspace = join(dir, "workspace");
+		await mkdir(workspace);
 		const fixture = join(dir, "delayed-guard.mjs");
 		await writeFile(fixture, [
 			"#!/usr/bin/env node",
@@ -488,7 +529,7 @@ describe("HOL Guard GitAgent integration", () => {
 				const context = { tool: "cli", args: { command: "git status" } };
 				const pending = evaluateWithGuard(context, {
 					binary: fixture,
-					workspace: dir,
+					workspace,
 					timeout_ms: 3000,
 				});
 				mutation(context);
@@ -509,6 +550,8 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 
 		const dir = await mkdtemp(join(tmpdir(), "gitagent-hol-guard-"));
+		const workspace = join(dir, "workspace");
+		await mkdir(workspace);
 		const capture = join(dir, "capture.json");
 		const fixture = join(dir, "hol-guard-fixture.mjs");
 		await writeFile(
@@ -525,7 +568,7 @@ describe("HOL Guard GitAgent integration", () => {
 				{ session_id: "session-1", tool: "cli", args: { command: "  cat <<'EOF'\nexample\nEOF\n" } },
 				{
 					binary: fixture,
-					workspace: dir,
+					workspace,
 					timeout_ms: 2000,
 					guard_home: join(dir, "guard-home"),
 					home: join(dir, "home"),
@@ -535,7 +578,7 @@ describe("HOL Guard GitAgent integration", () => {
 
 			const recorded = JSON.parse(await readFile(capture, "utf-8"));
 			assert.deepEqual(recorded.argv, ["command", "test", "--json", "--", "  cat <<'EOF'\nexample\nEOF\n"]);
-			assert.equal(recorded.cwd, dir);
+			assert.equal(recorded.cwd, workspace);
 			assert.equal(recorded.guardHome, join(dir, "guard-home"));
 			assert.equal(recorded.home, join(dir, "home"));
 		} finally {

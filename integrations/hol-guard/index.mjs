@@ -190,6 +190,13 @@ export async function evaluateWithGuard(ctx, config = {}) {
 			.filter((entry) => entry !== null)
 			.join(delimiter);
 	}
+	// An empty PATH is not a safe failure mode: on POSIX, spawn with PATH=""
+	// searches cwd. After removing worktree-controlled PATH entries, a bare
+	// executable name could otherwise launch ./hol-guard from the untrusted repo.
+	if (!binary.includes("/") && !binary.includes("\\") &&
+		!Object.keys(childEnv).some((key) => key.toUpperCase() === "PATH" && childEnv[key])) {
+		return { action: "block", reason: "HOL Guard executable PATH contains no trusted directory." };
+	}
 	const guardHome = nonEmptyString(config.guard_home);
 	if (guardHome) childEnv.HOL_GUARD_HOME = guardHome;
 	const home = nonEmptyString(config.home);

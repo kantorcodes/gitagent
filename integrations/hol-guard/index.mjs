@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { delimiter, isAbsolute, resolve } from "node:path";
+import { realpathSync } from "node:fs";
+import { delimiter, isAbsolute, relative, resolve, sep } from "node:path";
 
 const DEFAULT_TIMEOUT_MS = 6000;
 const MAX_GUARD_OUTPUT_BYTES = 1024 * 1024;
@@ -140,11 +141,32 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	const binary = configuredBinary.includes("/") || configuredBinary.includes("\\")
 		? resolve(launchDirectory, configuredBinary)
 		: configuredBinary;
+	let realWorkspace;
+	try {
+		realWorkspace = realpathSync(workspace);
+	} catch {
+		return { action: "block", reason: "HOL Guard could not verify the cli workspace." };
+	}
 	for (const key of Object.keys(childEnv)) {
 		if (key.toUpperCase() !== "PATH" || typeof childEnv[key] !== "string") continue;
 		childEnv[key] = childEnv[key]
 			.split(delimiter)
 			.map((entry) => isAbsolute(entry) ? entry : resolve(launchDirectory, entry || "."))
+			.filter((entry) => {
+				// Absolute PATH entries (and symlinks) may still point into the
+				// untrusted workspace. Never discover Guard from project-owned bins.
+				// Unresolvable entries are also omitted: they cannot be trusted.
+				let realEntry;
+				try {
+					realEntry = realpathSync(entry);
+				} catch {
+					return false;
+				}
+				const within = relative(realWorkspace, realEntry);
+				return within !== "" && (
+					within === ".." || within.startsWith(`..${sep}`) || isAbsolute(within)
+				);
+			})
 			.join(delimiter);
 	}
 	const guardHome = nonEmptyString(config.guard_home);

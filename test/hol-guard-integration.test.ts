@@ -543,7 +543,7 @@ describe("HOL Guard GitAgent integration", () => {
 		}
 	});
 
-	it("rejects a changed CLI command while Guard is inspecting", async (t) => {
+	it("rejects changed CLI arguments or tool identity while Guard is inspecting", async (t) => {
 		if (process.platform === "win32") {
 			t.skip("fixture executable uses a POSIX shebang");
 			return;
@@ -561,8 +561,10 @@ describe("HOL Guard GitAgent integration", () => {
 			for (const mutation of [
 				(context) => { context.args.command = "rm -rf ./workspace"; },
 				(context) => { context.tool = "read"; },
+				(context) => { context.args.timeout = 360; },
+				(context) => { context.args = { ...context.args }; },
 			]) {
-				const context = { tool: "cli", args: { command: "git status" } };
+				const context = { tool: "cli", args: { command: "git status", timeout: 30 } };
 				const pending = evaluateWithGuard(context, {
 					binary: fixture,
 					workspace,

@@ -122,7 +122,9 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	}
 	if (tool !== "cli") return { action: "allow" };
 	// Inspect the exact command GitAgent will execute; trimming can change shell/heredoc input.
-	const command = ctx?.args?.command;
+	const originalArgs = ctx?.args;
+	const command = originalArgs?.command;
+	const originalTimeout = originalArgs?.timeout;
 	if (typeof command !== "string" || !command.trim()) {
 		return { action: "block", reason: "HOL Guard could not inspect a cli command." };
 	}
@@ -319,7 +321,8 @@ export async function evaluateWithGuard(ctx, config = {}) {
 	// GitAgent passes the hook the same args object its CLI will execute. If
 	// another async callback replaces it while Guard is inspecting, an old
 	// benign verdict must not authorize the substituted tool or command.
-	if (ctx?.tool !== "cli" || ctx?.args?.command !== command) {
+	if (ctx?.tool !== "cli" || ctx?.args !== originalArgs ||
+		ctx?.args?.command !== command || ctx?.args?.timeout !== originalTimeout) {
 		return { action: "block", reason: "HOL Guard tool input changed during inspection." };
 	}
 	return verdict;
